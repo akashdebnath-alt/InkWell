@@ -1,0 +1,14 @@
+{
+  "name": "inkwell-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": {
+    "@tiptap/core": "^2.10.0",
+    "@tiptap/pm": "^2.10.0",
+    "@tiptap/starter-kit": "^2.10.0",
+    "@tiptap/extension-underline": "^2.10.0",
+    "@tiptap/extension-text-align": "^2.10.0"
+  },
+  "devDependencies": { "vite": "^5.4.0" }
+}

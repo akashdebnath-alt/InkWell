@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f3f1ed" />
+    <title>Inkwell — Creative writing</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background: var(--app-bg);
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        color-scheme: light;
+        --app-bg: #f3f1ed;
+        --surface: #fff;
+        --page-bg: #fff;
+        --text: #252624;
+        --page-text: #252624;
+        --muted: #77756f;
+        --border: #d5d2cb;
+        --soft-border: #e1ddd6;
+        --brand: #594b3d;
+        --brand-hover: #9c8063;
+        --success: #3f7652;
+        --danger: #8d3932;
+        --error-text: #812e27;
+        --error-bg: #fff3f1;
+        --error-border: #e6b7b2;
+        --ghost: #b7b5b1;
+        --shadow: #30241412;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --app-bg: #191a1c;
+        --surface: #242629;
+        --page-bg: #202225;
+        --text: #e7e4de;
+        --page-text: #e7e4de;
+        --muted: #aaa69f;
+        --border: #484a4e;
+        --soft-border: #3b3d40;
+        --brand: #d4b99a;
+        --brand-hover: #e2c6a5;
+        --success: #8bc49b;
+        --danger: #ef9b91;
+        --error-text: #ffc2ba;
+        --error-bg: #3b2524;
+        --error-border: #75423d;
+        --ghost: #aaa6a0;
+        --shadow: #00000055;
+      }
+      [hidden] { display: none !important; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--app-bg); color: var(--text); }
+      button, input, textarea { font: inherit; }
+      button {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--brand-hover); }
+      button:disabled { opacity: .6; cursor: wait; }
+      .primary-button { background: var(--brand); border-color: var(--brand); color: var(--surface); }
+      .danger-button { color: var(--danger); }
+      .screen { min-height: 100vh; }
+      #auth-screen {
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--app-bg);
+      }
+      .auth-card {
+        width: min(100%, 410px);
+        padding: 36px;
+        border: 1px solid var(--soft-border);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 16px 48px var(--shadow);
+      }
+      .brand { margin: 0; color: var(--brand); font: 600 32px Georgia, serif; }
+      .muted { color: var(--muted); }
+      .form-field { display: grid; gap: 7px; margin: 18px 0; }
+      .form-field input, #assistant-request {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      #auth-form .primary-button { width: 100%; margin-top: 6px; }
+      #auth-switch {
+        width: 100%;
+        margin-top: 14px;
+        border-color: transparent;
+        background: transparent;
+        color: var(--brand);
+      }
+      .error-message {
+        margin: 16px auto;
+        max-width: 860px;
+        padding: 12px 16px;
+        border: 1px solid var(--error-border);
+        border-radius: 6px;
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+      .error-message[hidden] { display: none; }
+      #documents-screen { padding: 42px 24px; }
+      .documents-header, .editor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .documents-header, #documents-list, #documents-empty, #documents-loading {
+        width: min(100%, 860px);
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .documents-header h1 { margin: 0; font: 600 30px Georgia, serif; }
+      #documents-list { display: grid; gap: 10px; padding: 0; list-style: none; }
+      .document-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--soft-border);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+      .document-open {
+        overflow: hidden;
+        border: 0;
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: 600 18px Georgia, serif;
+      }
+      .document-date { color: var(--muted); font-size: 12px; }
+      #documents-empty { padding: 48px 0; text-align: center; }
+      #editor-screen { min-height: 100vh; }
+      #toolbar {
+        position: sticky;
+        z-index: 2;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--soft-border);
+        background: var(--surface);
+      }
+      #toolbar button { min-width: 38px; padding: 6px 10px; }
+      #document-title { margin-left: 8px; color: var(--muted); font-size: 14px; }
+      #save-status { margin-left: auto; color: var(--muted); font-size: 13px; }
+      #save-status[data-state="saved"] { color: var(--success); }
+      #save-status[data-state="error"] { color: var(--danger); }
+      #layout { display: flex; align-items: flex-start; gap: 20px; max-width: 1260px; margin: 24px auto; padding: 0 20px; }
+      #page {
+        flex: 1 1 760px;
+        min-width: 0;
+        min-height: 900px;
+        padding: 72px 76px;
+        background: var(--page-bg);
+        color: var(--page-text);
+        box-shadow: 0 2px 14px var(--shadow);
+      }
+      .ProseMirror { min-height: 750px; outline: none; color: var(--page-text); font: 18px/1.8 Georgia, serif; }
+      .ProseMirror p { margin: 0 0 1em; }
+      .ghost { color: var(--ghost); opacity: .78; pointer-events: none; }
+      #side {
+        flex: 0 0 290px;
+        padding: 18px;
+        border: 1px solid var(--soft-border);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 14px;
+      }
+      #side textarea { min-height: 90px; resize: vertical; }
+      #assistant-request { margin-bottom: 10px; }
+      #assistant-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+      #assistant-modes button { padding: 6px 8px; font-size: 12px; }
+      #assistant-results { margin-top: 12px; line-height: 1.6; }
+      #assistant-results ul { padding-left: 20px; }
+      .result-option { display: block; width: 100%; margin: 6px 0; text-align: left; }
+      #reference-panel, #version-panel { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--soft-border); }
+      #reference-panel h3 { margin: 0 0 10px; font-size: 14px; }
+      #reference-upload { width: 100%; margin: 4px 0 10px; font-size: 12px; }
+      #reference-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+      #reference-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      #reference-list li span { overflow-wrap: anywhere; }
+      #reference-list button { flex: 0 0 auto; padding: 5px 8px; font-size: 12px; }
+      #references-status, #versions-status { min-height: 1.4em; color: var(--muted); font-size: 12px; }
+      #version-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+      #version-list button { width: 100%; text-align: left; font-size: 12px; }
+      #status-bar { display: flex; justify-content: flex-end; gap: 20px; max-width: 1260px; margin: -10px auto 24px; padding: 0 20px; color: var(--muted); font-size: 12px; }
+      @media (max-width: 760px) {
+        #layout { flex-direction: column; padding: 0 12px; }
+        #page { width: 100%; min-height: 65vh; padding: 36px 24px; }
+        #side { width: 100%; flex-basis: auto; }
+        .document-row { grid-template-columns: 1fr auto auto; }
+        .document-date { display: none; }
+        #save-status { width: 100%; margin-left: 0; }
+        #toolbar { position: static; }
+        #status-bar { padding: 0 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="auth-screen" class="screen" hidden>
+      <section class="auth-card" aria-labelledby="auth-title">
+        <p class="brand">Inkwell</p>
+        <p class="muted">A quiet place to write.</p>
+        <h1 id="auth-title">Welcome back</h1>
+        <form id="auth-form">
+          <label class="form-field">
+            Email
+            <input id="auth-email" name="email" type="email" autocomplete="email" required maxlength="320" />
+          </label>
+          <label class="form-field">
+            Password
+            <input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128" />
+          </label>
+          <button id="auth-submit" class="primary-button" type="submit">Log in</button>
+        </form>
+        <button id="auth-switch" type="button">Need an account? Register</button>
+      </section>
+    </main>
+
+    <main id="documents-screen" class="screen" hidden>
+      <header class="documents-header">
+        <div>
+          <p class="brand">Inkwell</p>
+          <h1>Your writing</h1>
+        </div>
+        <div>
+          <button id="logout" type="button">Log out</button>
+          <button id="create-document" class="primary-button" type="button">New document</button>
+        </div>
+      </header>
+      <p id="documents-loading" class="muted" hidden>Loading documents...</p>
+      <p id="documents-empty" class="muted" hidden>No documents yet. Start with a new one.</p>
+      <ul id="documents-list" aria-label="Your documents"></ul>
+    </main>
+
+    <main id="editor-screen" class="screen" hidden>
+      <div id="toolbar" role="toolbar" aria-label="Text formatting">
+        <button id="back-to-documents" type="button">Documents</button>
+        <span id="document-title"></span>
+        <button data-cmd="bold" type="button" aria-label="Bold"><b>B</b></button>
+        <button data-cmd="italic" type="button" aria-label="Italic"><i>I</i></button>
+        <button data-cmd="underline" type="button" aria-label="Underline"><u>U</u></button>
+        <button data-cmd="h1" type="button">H1</button>
+        <button data-cmd="h2" type="button">H2</button>
+        <button data-cmd="h3" type="button">H3</button>
+        <button data-cmd="bullet" type="button">• List</button>
+        <button data-cmd="ordered" type="button">1. List</button>
+        <button data-cmd="align-left" type="button" aria-label="Align left">⇤</button>
+        <button data-cmd="align-center" type="button" aria-label="Align center">↔</button>
+        <button data-cmd="align-right" type="button" aria-label="Align right">⇥</button>
+        <button data-cmd="align-justify" type="button" aria-label="Justify">☷</button>
+        <button data-cmd="undo" type="button" aria-label="Undo">↶</button>
+        <button data-cmd="redo" type="button" aria-label="Redo">↷</button>
+        <button id="export-docx" type="button">Word</button>
+        <button id="export-pdf" type="button">PDF</button>
+        <button id="toggle-dark-mode" type="button" aria-pressed="false">Dark mode</button>
+        <button id="toggle-versions" type="button" aria-expanded="false">Version history</button>
+        <span id="save-status" role="status" aria-live="polite"></span>
+      </div>
+      <div id="layout">
+        <section id="page" aria-label="Document page"><div id="editor"></div></section>
+        <aside id="side">
+          <strong>Writing assistant</strong>
+          <p class="muted">Select text, then choose a kind of help. Your words remain yours.</p>
+          <textarea id="assistant-request" rows="2" placeholder="Optional instruction"></textarea>
+          <div id="assistant-modes" aria-label="Assistant mode">
+            <button data-mode="synonyms" type="button">Synonyms</button>
+            <button data-mode="rhymes" type="button">Rhymes</button>
+            <button data-mode="imagery" type="button">Imagery</button>
+            <button data-mode="feedback" type="button">Feedback</button>
+            <button data-mode="rewrite_short" type="button">Rewrite</button>
+          </div>
+          <div id="assistant-results" aria-live="polite"></div>
+          <section id="reference-panel" aria-labelledby="reference-heading">
+            <h3 id="reference-heading">Reference materials</h3>
+            <input id="reference-upload" type="file" accept=".txt,.md,text/plain,text/markdown" />
+            <p id="references-status" role="status" aria-live="polite"></p>
+            <p id="references-empty" class="muted">No reference files yet.</p>
+            <ul id="reference-list" aria-label="Reference materials"></ul>
+          </section>
+          <section id="version-panel" aria-labelledby="version-heading" hidden>
+            <h3 id="version-heading">Version history</h3>
+            <p id="versions-status" role="status" aria-live="polite"></p>
+            <p id="versions-empty" class="muted" hidden>No saved versions yet.</p>
+            <ul id="version-list" aria-label="Document versions"></ul>
+          </section>
+        </aside>
+      </div>
+      <footer id="status-bar" aria-live="polite">
+        <span id="word-count">0 words</span>
+        <span id="character-count">0 characters</span>
+      </footer>
+    </main>
+
+    <p id="error-message" class="error-message" role="alert" hidden></p>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
