@@ -14,3 +14,7 @@ dist/
 **/dist/
 .pytest_cache/
 *.py[cod]
+*.zip
+*.db
+*.db-shm
+*.db-wal

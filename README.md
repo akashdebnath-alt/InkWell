@@ -1,7 +1,7 @@
 # Inkwell
 
 Inkwell is a creative-writing editor built with TipTap, Vite, FastAPI, MySQL,
-ChromaDB, and Anthropic. The writing assistant offers short suggestions,
+ChromaDB, and Gemini. The writing assistant offers short suggestions,
 selected-text feedback, and brief rewrites; it is not intended to write a whole
 story, poem, or chapter.
 
@@ -54,10 +54,9 @@ Edit `backend\.env` and set each value:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | SQLAlchemy connection string for the MySQL database and user created above. |
-| `ANTHROPIC_API_KEY` | Anthropic API key. Leave the placeholder if you only want to use documents; AI routes will return a helpful `503` until a key is configured. |
+| `GEMINI_API_KEY` | Gemini Developer API key. Leave the placeholder if you only want to use documents; AI routes will return a helpful `503` until a key is configured. |
 | `JWT_SECRET_KEY` | Signing key for login tokens. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"` and paste the output here. |
-| `FAST_MODEL` | Anthropic model used for short ghost-text suggestions. |
-| `SMART_MODEL` | Anthropic model used for assistant-panel requests. |
+| `GEMINI_MODEL` | Gemini model used for ghost text and assistant-panel requests. Defaults to `gemini-3.8-flash`. |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. The default is `http://localhost:5173`. |
 
 Do not commit `backend\.env` or paste its values into issues or logs. The
@@ -96,7 +95,7 @@ python -m pytest tests -v
 
 The test configuration uses an in-memory SQLite database, not the configured
 MySQL database. AI and RAG calls in the end-to-end test are mocked, so the suite
-does not need an Anthropic key and does not incur API charges.
+does not need a Gemini key and does not incur API charges.
 
 ## Editor features
 
@@ -106,6 +105,9 @@ does not need an Anthropic key and does not incur API charges.
 - DOCX/PDF exports include headings, bold, italic, underline, lists, and text
   alignment.
 - The dark-mode preference is saved in browser local storage.
+- Choose general writing, poem, story, or essay from the editor toolbar. The
+  selected form guides ghost text and assistant suggestions and is remembered
+  for each document.
 - `Ctrl+S` saves immediately; `Ctrl+B`, `Ctrl+I`, and `Ctrl+U` format text;
   `Ctrl+Z` and `Ctrl+Y` undo and redo. On macOS, the equivalent `Command` keys
   are supported.
@@ -121,9 +123,11 @@ does not need an Anthropic key and does not incur API charges.
 - `POST /reference` accepts a `.txt` or `.md` file up to 1 MB.
 - `POST /suggest` streams short ghost text as server-sent events. The editor's
   faded suggestion is accepted with `Tab` or dismissed with `Esc`.
-- `POST /assist` supports `synonyms`, `rhymes`, `imagery`, `feedback`, and
-  `rewrite_short`. The assistant works on selected text and does not generate
-  an entire creative work.
+- `POST /assist` supports next-line ideas, rhythm revisions, story ideas,
+  synonyms, rhymes, imagery, feedback, and short rewrites. Story ideas can use
+  the draft or a prompt without selecting text. Next-line and rhythm suggestions
+  can use the current paragraph; word help and revisions work on selected text.
+  Results are suggestions for the author, not whole generated works.
 - AI requests are limited to 60 per user per minute. Login and registration
   share a 10-attempt-per-IP-per-minute limit.
 
@@ -143,7 +147,7 @@ does not need an Anthropic key and does not incur API charges.
 - **Frontend reports a network/CORS error:** Keep both servers running, open
   the frontend at `http://localhost:5173`, and ensure that origin is present in
   `CORS_ORIGINS`.
-- **AI features return `503`:** Set a valid `ANTHROPIC_API_KEY` in
+- **AI features return `503`:** Set a valid `GEMINI_API_KEY` in
   `backend\.env`, then restart the backend.
 - **`node` or `npm` is not recognized:** Install Node.js LTS and open a new
   PowerShell window so the updated `PATH` is loaded.

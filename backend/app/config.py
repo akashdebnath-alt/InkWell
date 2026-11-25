@@ -5,10 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str
-    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
     jwt_secret_key: str = ""
-    fast_model: str = "claude-haiku-5-5"
-    smart_model: str = "claude-sonnet-5-5"
+    gemini_model: str = "gemini-3.8-flash"
     cors_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(
@@ -18,8 +17,8 @@ class Settings(BaseSettings):
     )
 
     @property
-    def has_anthropic_api_key(self) -> bool:
-        value = self.anthropic_api_key.strip()
+    def has_gemini_api_key(self) -> bool:
+        value = self.gemini_api_key.strip()
         return bool(value and value.lower() not in {"your_key_here", "replace_me", "placeholder"})
 
     @property

@@ -10,7 +10,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET_KEY"] = "inkwell-test-secret"
-os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["GEMINI_MODEL"] = "gemini-3.8-flash"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 
 from app import main

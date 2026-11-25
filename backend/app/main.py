@@ -4,12 +4,13 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi.exceptions import RequestValidationError
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -23,14 +24,15 @@ from .rate_limit import auth_rate_limiter, user_rate_limiter
 logger = logging.getLogger(__name__)
 VERSION_INTERVAL = timedelta(minutes=5)
 MAX_REFERENCE_BYTES = 1024 * 1024
+WritingType = Literal["general", "poem", "story", "essay"]
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    if not settings.has_anthropic_api_key:
+    if not settings.has_gemini_api_key:
         logger.warning(
-            "ANTHROPIC_API_KEY is missing or still a placeholder in backend/.env; "
+            "GEMINI_API_KEY is missing or still a placeholder in backend/.env; "
             "AI routes will return 503 until it is configured."
         )
     if not settings.jwt_secret_key.strip():
@@ -48,6 +50,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/", include_in_schema=False)
+def open_frontend():
+    frontend_origin = next(
+        (origin for origin in settings.allowed_origins if origin != "*"),
+        "http://localhost:5173",
+    )
+    return RedirectResponse(f"{frontend_origin.rstrip('/')}/")
 
 
 @app.exception_handler(SQLAlchemyError)
@@ -103,6 +114,7 @@ class DocumentUpdate(BaseModel):
 class GhostIn(BaseModel):
     doc_id: int = Field(gt=0)
     text_before: str = Field(min_length=1, max_length=5000)
+    writing_type: WritingType = "general"
 
 
 class AssistIn(BaseModel):
@@ -110,6 +122,7 @@ class AssistIn(BaseModel):
     mode: str = Field(min_length=1, max_length=32)
     request: str = Field(default="", max_length=2000)
     selection: str = Field(default="", max_length=10000)
+    writing_type: WritingType = "general"
 
 
 class IndexIn(BaseModel):
@@ -501,10 +514,10 @@ def delete_reference(
 
 
 def _require_ai_key():
-    if not settings.has_anthropic_api_key:
+    if not settings.has_gemini_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI features are unavailable. Configure ANTHROPIC_API_KEY in backend/.env.",
+            detail="AI features are unavailable. Configure GEMINI_API_KEY in backend/.env.",
         )
 
 
@@ -568,7 +581,11 @@ def suggest(
         body.text_before[-300:],
         text_before_cursor=body.text_before,
     )
-    suggestion = llm.ghost(body.text_before[-1500:], context)
+    suggestion = llm.ghost(
+        body.text_before[-1500:],
+        context,
+        writing_type=body.writing_type,
+    )
     return StreamingResponse(
         _suggest_events(suggestion),
         media_type="text/event-stream",
@@ -590,15 +607,32 @@ def assist(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Choose a supported writing-assistant mode.",
         )
-    if not body.selection.strip():
+    if not body.selection.strip() and body.mode != "story_ideas":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Select a word or passage in your document first.",
+        )
+    if body.mode == "story_ideas" and not (
+        body.selection.strip() or body.request.strip()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Select some draft text or enter a story prompt first.",
         )
     user_rate_limiter.check(user.id)
     _require_ai_key()
     from . import rag
 
-    context = _retrieve_context(rag, body.doc_id, body.selection or body.request)
-    result = llm.assist(body.mode, body.request, body.selection, context)
+    context = _retrieve_context(
+        rag,
+        body.doc_id,
+        body.selection.strip() or body.request.strip() or body.writing_type,
+    )
+    result = llm.assist(
+        body.mode,
+        body.request,
+        body.selection,
+        context,
+        writing_type=body.writing_type,
+    )
     return {"mode": body.mode, **result}

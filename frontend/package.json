@@ -2,7 +2,7 @@
   "name": "inkwell-frontend",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite", "build": "vite build" },
+  "scripts": { "dev": "vite", "build": "vite build --target es2022" },
   "dependencies": {
     "@tiptap/core": "^2.10.0",
     "@tiptap/pm": "^2.10.0",

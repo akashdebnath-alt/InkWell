@@ -11,6 +11,7 @@ const documentsScreen = $("#documents-screen");
 const editorScreen = $("#editor-screen");
 const errorMessage = $("#error-message");
 const THEME_KEY = "inkwell.theme";
+const WRITING_TYPES = new Set(["general", "poem", "story", "essay"]);
 
 function applyTheme(theme) {
   const isDark = theme === "dark";
@@ -29,6 +30,7 @@ let documentDirty = false;
 let authMode = "login";
 let assistantRequestId = 0;
 let pendingSelection = null;
+let writingType = "general";
 
 const editor = new Editor({
   element: $("#editor"),
@@ -36,7 +38,10 @@ const editor = new Editor({
     StarterKit,
     Underline,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
-    GhostText.configure({ getDocId: () => currentDocument?.id }),
+    GhostText.configure({
+      getDocId: () => currentDocument?.id,
+      getWritingType: () => writingType,
+    }),
   ],
   content: "",
   editable: false,
@@ -300,6 +305,11 @@ async function openDocument(id) {
     $("#document-title").textContent = document.title;
     editor.commands.setContent(getEditorContent(document.content), false);
     currentDocument = { id: document.id, title: document.title };
+    const savedWritingType = localStorage.getItem(
+      `inkwell.writing-type:${document.id}`,
+    );
+    writingType = WRITING_TYPES.has(savedWritingType) ? savedWritingType : "general";
+    $("#writing-type").value = writingType;
     documentDirty = false;
     editor.setEditable(true);
     loadingDocument = false;
@@ -574,16 +584,57 @@ function replacePendingSelection(replacement) {
   pendingSelection = null;
 }
 
+function currentBlockTarget(documentId) {
+  const { $from } = editor.state.selection;
+  const from = $from.start();
+  const to = $from.end();
+  const text = editor.state.doc.textBetween(from, to, " ");
+  if (!text.trim()) return null;
+  return { documentId, from, to, text };
+}
+
+function insertNextLine(line) {
+  const target = pendingSelection;
+  if (!target || currentDocument?.id !== target.documentId) return;
+  const selectedText = editor.state.doc.textBetween(target.from, target.to, " ");
+  if (selectedText !== target.text) {
+    showError("The selected text changed. Select it again before inserting a line.");
+    return;
+  }
+  const selectionEnd = editor.state.doc.resolve(target.to);
+  const insertAt = selectionEnd.after(selectionEnd.depth);
+  editor.chain().focus().insertContentAt(insertAt, {
+    type: "paragraph",
+    content: [{ type: "text", text: line }],
+  }).run();
+  pendingSelection = null;
+}
+
 async function askAssistant(mode) {
   if (!currentDocument) return;
   const { from, to } = editor.state.selection;
-  const selection = editor.state.doc.textBetween(from, to, " ");
-  if (!selection.trim()) {
-    showError("Select text in your document first.");
+  let selection = editor.state.doc.textBetween(from, to, " ");
+  const documentId = currentDocument.id;
+  let target = selection.trim()
+    ? { documentId, from, to, text: selection }
+    : null;
+  if (!target && (mode === "next_line" || mode === "rhythm")) {
+    target = currentBlockTarget(documentId);
+    if (!target) {
+      showError("Write some text in this paragraph, or select a passage first.");
+      return;
+    }
+    selection = target.text;
+  } else if (!target && mode !== "story_ideas") {
+    showError(
+      "Select a word or passage first. Next line and Improve rhythm can use the current paragraph.",
+    );
     return;
   }
-  const documentId = currentDocument.id;
-  pendingSelection = { documentId, from, to, text: selection };
+  const textForAssistant = selection.trim()
+    ? selection
+    : editor.getText().slice(-10000);
+  pendingSelection = target;
   const requestId = ++assistantRequestId;
   const output = $("#assistant-results");
   output.replaceChildren();
@@ -598,19 +649,30 @@ async function askAssistant(mode) {
         doc_id: documentId,
         mode,
         request: $("#assistant-request").value.trim(),
-        selection,
+        selection: textForAssistant,
+        writing_type: writingType,
       }),
     });
     if (requestId !== assistantRequestId || currentDocument?.id !== documentId) return;
     output.replaceChildren();
     if (result.options) {
       for (const option of result.options) {
-        const button = window.document.createElement("button");
-        button.type = "button";
-        button.className = "result-option";
-        button.textContent = option;
-        button.addEventListener("click", () => replacePendingSelection(option));
-        output.append(button);
+        if (mode === "story_ideas") {
+          const idea = window.document.createElement("article");
+          idea.className = "idea-card";
+          idea.textContent = option;
+          output.append(idea);
+        } else {
+          const button = window.document.createElement("button");
+          button.type = "button";
+          button.className = "result-option";
+          button.textContent = option;
+          button.addEventListener("click", () => {
+            if (mode === "next_line") insertNextLine(option);
+            else replacePendingSelection(option);
+          });
+          output.append(button);
+        }
       }
     } else if (result.feedback) {
       const list = window.document.createElement("ul");
@@ -639,6 +701,12 @@ async function askAssistant(mode) {
 $("#assistant-modes").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-mode]");
   if (button) askAssistant(button.dataset.mode);
+});
+
+$("#writing-type").addEventListener("change", (event) => {
+  if (!currentDocument) return;
+  writingType = event.currentTarget.value;
+  localStorage.setItem(`inkwell.writing-type:${currentDocument.id}`, writingType);
 });
 
 $("#reference-upload").addEventListener("change", async (event) => {

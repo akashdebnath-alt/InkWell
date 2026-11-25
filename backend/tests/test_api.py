@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta
 from io import BytesIO
+from types import SimpleNamespace
 
 from docx import Document as WordDocument
 
@@ -220,7 +221,7 @@ def test_docx_and_pdf_exports_keep_formatting_and_safe_filename(client):
     ).status_code == 400
 
 
-def test_suggest_returns_503_without_anthropic_key(client):
+def test_suggest_returns_503_without_gemini_key(client):
     headers = auth_headers(register(client))
     document_id = client.post(
         "/documents",
@@ -234,7 +235,7 @@ def test_suggest_returns_503_without_anthropic_key(client):
         json={"doc_id": document_id, "text_before": "A sufficiently long opening"},
     )
     assert response.status_code == 503
-    assert "Configure ANTHROPIC_API_KEY" in response.json()["detail"]
+    assert "Configure GEMINI_API_KEY" in response.json()["detail"]
 
 
 def test_auth_endpoints_limit_repeated_attempts(client):
@@ -275,6 +276,141 @@ def test_cors_reads_configured_origins_and_defaults_to_vite(client):
     )
     assert allowed.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert "access-control-allow-origin" not in denied.headers
+
+
+def test_suggest_uses_the_selected_writing_form(client, monkeypatch):
+    headers = auth_headers(register(client))
+    document_id = client.post(
+        "/documents",
+        headers=headers,
+        json={"title": "Poem", "content": ""},
+    ).json()["id"]
+    monkeypatch.setattr(main, "_require_ai_key", lambda: None)
+    monkeypatch.setattr(rag, "retrieve", lambda *_args, **_kwargs: [])
+    from app import llm
+
+    received = {}
+
+    def fake_ghost(text_before, context, writing_type="general"):
+        received["writing_type"] = writing_type
+        return "over quiet water"
+
+    monkeypatch.setattr(llm, "ghost", fake_ghost)
+    response = client.post(
+        "/suggest",
+        headers=headers,
+        json={
+            "doc_id": document_id,
+            "text_before": "The moon is rising",
+            "writing_type": "poem",
+        },
+    )
+
+    assert response.status_code == 200
+    assert received["writing_type"] == "poem"
+    suggestion_chunks = [
+        json.loads(line[len("data: ") :])["text"]
+        for line in response.text.splitlines()
+        if line.startswith("data: {")
+    ]
+    assert "".join(suggestion_chunks) == "over quiet water"
+
+
+def test_story_ideas_can_use_a_prompt_without_selected_text(client, monkeypatch):
+    headers = auth_headers(register(client))
+    document_id = client.post(
+        "/documents",
+        headers=headers,
+        json={"title": "Story", "content": ""},
+    ).json()["id"]
+    monkeypatch.setattr(main, "_require_ai_key", lambda: None)
+    monkeypatch.setattr(
+        rag,
+        "retrieve",
+        lambda *_args, **_kwargs: ["A town where nobody remembers yesterday."],
+    )
+    from app import llm
+
+    received = {}
+
+    def fake_assist(mode, request, selection, context, writing_type="general"):
+        received.update(
+            mode=mode,
+            request=request,
+            selection=selection,
+            context=context,
+            writing_type=writing_type,
+        )
+        return {"options": ["A concise premise."] * 5}
+
+    monkeypatch.setattr(llm, "assist", fake_assist)
+    response = client.post(
+        "/assist",
+        headers=headers,
+        json={
+            "doc_id": document_id,
+            "mode": "story_ideas",
+            "request": "Give me a mystery premise",
+            "writing_type": "story",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "story_ideas"
+    assert len(response.json()["options"]) == 5
+    assert received["selection"] == ""
+    assert received["writing_type"] == "story"
+    assert received["context"] == ["A town where nobody remembers yesterday."]
+
+
+def test_story_ideas_llm_uses_story_guidance_without_selected_text(monkeypatch):
+    from app import llm
+
+    ideas = [
+        "A lighthouse keeper receives tomorrow's weather reports.",
+        "A family inherits a house that appears only in photographs.",
+        "A village votes each year on which memory to forget.",
+        "A map redraws itself around its owner's secrets.",
+        "Two rivals discover they share the same impossible dream.",
+    ]
+
+    class FakeModels:
+        request = None
+
+        def generate_content(self, **kwargs):
+            self.request = kwargs
+            return SimpleNamespace(text=json.dumps(ideas))
+
+    models = FakeModels()
+    monkeypatch.setattr(
+        llm,
+        "_client",
+        lambda: SimpleNamespace(models=models, close=lambda: None),
+    )
+
+    result = llm.assist(
+        "story_ideas",
+        "Give me a mystery premise",
+        "",
+        ["A town where nobody remembers yesterday."],
+        writing_type="story",
+    )
+
+    assert result == {"options": ideas}
+    assert "Treat this as fiction." in models.request["config"].system_instruction
+    assert models.request["config"].response_mime_type == "application/json"
+    assert "town where nobody remembers yesterday" in models.request["contents"]
+    assert models.request["model"] == "gemini-3.8-flash"
+
+
+def test_gemini_auth_error_explains_how_to_fix_the_key():
+    from app import llm
+
+    error = SimpleNamespace(code=401)
+    response = llm._gemini_error(error)
+
+    assert response.status_code == 503
+    assert "GEMINI_API_KEY" in response.detail
 
 
 def test_full_writing_assistant_reference_export_restore_flow(client, monkeypatch):

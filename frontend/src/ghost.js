@@ -8,10 +8,10 @@ const key = new PluginKey("ghost");
 export const GhostText = Extension.create({
   name: "ghostText",
   addOptions() {
-    return { getDocId: () => null, delay: 500 };
+    return { getDocId: () => null, getWritingType: () => "general", delay: 500 };
   },
   addProseMirrorPlugins() {
-    const { getDocId, delay } = this.options;
+    const { getDocId, getWritingType, delay } = this.options;
     let timer = null;
     let controller = null;
 
@@ -73,7 +73,11 @@ export const GhostText = Extension.create({
                 try {
                   const suggestion = await apiStream("/suggest", {
                     method: "POST",
-                    body: JSON.stringify({ doc_id: docId, text_before: before }),
+                    body: JSON.stringify({
+                      doc_id: docId,
+                      text_before: before,
+                      writing_type: getWritingType(),
+                    }),
                     signal: requestController.signal,
                   });
                   if (
